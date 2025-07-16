@@ -1,0 +1,9 @@
+services:
+  inference:
+    tty: true  # equivalent to -t
+    stdin_open: true  # equivalent to -i
+    command: >
+      sh -c '
+        echo "Skipping inference server start and starting an interactive shell to allow for service start customization, debugger attachment etc. ...";
+        exec bash;
+      '

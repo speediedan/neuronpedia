@@ -142,13 +142,15 @@ inference-localhost-dev: ## Inference: Localhost Environment - Run (Development 
 			exit 1; \
 		fi; \
 		echo "Using model configuration: .env.inference.$(MODEL_SOURCESET)"; \
-		RELOAD=$$([ "$(AUTORELOAD)" = "1" ] && echo "1" || echo "0") \
+        RELOAD=$$([ "$(AUTORELOAD)" = "1" ] && echo "1" || echo "0"); \
 		ENV_FILE=.env.inference.$(MODEL_SOURCESET) \
+		RELOAD=$$RELOAD \
 			docker compose \
 			-f docker-compose.yaml \
 			-f docker-compose.inference.dev.yaml \
 			$(if $(ENABLE_GPU),-f docker-compose.inference.gpu.yaml,) \
 			$(if $(USE_LOCAL_HF_CACHE),-f docker-compose.hf-cache.yaml,) \
+			$(if $(INFERENCE_SERVER_NOSTART),-f docker-compose.inference.dev.interactive.yaml,) \
 			--env-file .env.inference.$(MODEL_SOURCESET) \
 			--env-file .env.localhost \
 			--env-file .env \
@@ -160,7 +162,7 @@ inference-localhost-dev: ## Inference: Localhost Environment - Run (Development 
 	fi
 
 inference-localhost-dev-gpu: ## Inference: Localhost Environment - Run (Development Build with CUDA). Usage: make inference-localhost-dev-gpu [MODEL_SOURCESET=gpt2-small.res-jb] [AUTORELOAD=1] [USE_LOCAL_HF_CACHE=1]
-	$(MAKE) inference-localhost-dev ENABLE_GPU=1 MODEL_SOURCESET=$(MODEL_SOURCESET) AUTORELOAD=$(AUTORELOAD)
+	$(MAKE) inference-localhost-dev ENABLE_GPU=1 MODEL_SOURCESET=$(MODEL_SOURCESET) AUTORELOAD=$(AUTORELOAD) INFERENCE_SERVER_NOSTART=$(INFERENCE_SERVER_NOSTART)
 
 inference-list-configs: ## Inference: List Configurations (possible values for MODEL_SOURCESET)
 	@echo "\nAvailable Inference Configurations (.env.inference.*)\n================================================\n"
