@@ -96,6 +96,7 @@ webapp-localhost-dev: ## Webapp: Localhost Environment - Run (Development Build)
 	ENV_FILE=.env.localhost docker compose \
 		-f docker-compose.yaml \
 		-f docker-compose.webapp.dev.yaml \
+		$(if $(WEBAPP_SERVER_NOSTART),-f docker-compose.webapp.dev.interactive.yaml,) \
 		--env-file .env.localhost \
 		--env-file .env \
 		up webapp db-init postgres

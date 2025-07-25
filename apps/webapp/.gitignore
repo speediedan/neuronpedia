@@ -45,6 +45,9 @@ next-env.d.ts
 # docker build
 build.log
 
+# vscode config for webapp dev container
+.vscode/**
+
 # yarn not using zero-installs - for yarn v2+ later
 # currently vercel doesn't support yarn v2
 .pnp.*
