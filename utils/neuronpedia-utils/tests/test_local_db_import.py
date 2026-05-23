@@ -13,6 +13,12 @@ from typing import Any
 import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
+LEGACY_BASELINE_CONTRACT_PATH = (
+    Path(__file__).parent
+    / "fixtures"
+    / "legacy_dashboard_gen_baseline"
+    / "preserved_baseline_contract.json"
+)
 if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
@@ -38,6 +44,10 @@ def _write_jsonl_gz(path: Path, records: list[dict[str, Any]]) -> None:
         for record in records:
             handle.write(json.dumps(record))
             handle.write("\n")
+
+
+def _load_legacy_baseline_contract() -> dict[str, Any]:
+    return json.loads(LEGACY_BASELINE_CONTRACT_PATH.read_text(encoding="utf-8"))
 
 
 def test_export_data_uses_psycopg_dict_row_connections(
@@ -138,6 +148,30 @@ def test_summarize_bundle_arrow_and_parquet_match_jsonl_counts(tmp_path: Path) -
         ).row_count_mismatches
         == {}
     )
+
+
+def test_legacy_preserved_baseline_contract_keeps_jsonl_import_mode() -> None:
+    baseline = _load_legacy_baseline_contract()
+
+    assert baseline["preserved_baseline_lineage"] == {
+        "saedashboard": "7886eaa",
+        "saelens": "3eea6552",
+        "neuronpedia": "5a33f17",
+    }
+    assert db_import.DEFAULT_IMPORT_MODE_CONFIGS["jsonl"] == {
+        "prefer_arrow_for_tables": (),
+        "prefer_copy_for_tables": (),
+    }
+
+    for scenario in baseline["scenarios"].values():
+        import_contract = scenario["import_contract"]
+        legacy_contract = scenario["legacy_contract"]
+        assert legacy_contract["export_bundle_format"] == "legacy_jsonl_gzip"
+        assert legacy_contract["sequence_selection_backend"] == "legacy_json_cpu"
+        assert import_contract["import_mode"] == "jsonl"
+        assert import_contract["prefer_arrow_for_tables"] == []
+        assert import_contract["prefer_copy_for_tables"] == []
+        assert scenario["preserved_baseline_result"]["imported_activation_rows"] > 0
 
 
 def test_discover_import_artifacts_prefers_parquet_then_arrow_for_columnar_tables(
