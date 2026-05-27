@@ -300,6 +300,8 @@ def main(
             final_output_dir = os.path.join(OUTPUT_PATH_BASE, source_id)
             if not os.path.exists(final_output_dir):
                 os.makedirs(final_output_dir)
+            if not emit_arrow:
+                _remove_arrow_sidecars(final_output_dir)
 
             # make the release jsonl
             release_file_path = os.path.join(final_output_dir, "release.jsonl")
@@ -531,12 +533,24 @@ def _write_flat_table_rows(
     emit_arrow: bool,
 ) -> tuple[str, str | None]:
     if not emit_arrow or not rows:
+        arrow_path = _arrow_path_for_jsonl(jsonl_path)
+        if os.path.exists(arrow_path):
+            os.remove(arrow_path)
         return _write_legacy_jsonl_rows(rows, jsonl_path), None
 
     arrow_path = _arrow_path_for_jsonl(jsonl_path)
     dataframe = _rows_to_polars_dataframe(rows)
     _write_arrow_rows(rows, arrow_path, dataframe=dataframe)
     return _write_polars_jsonl_rows(rows, jsonl_path, dataframe=dataframe), arrow_path
+
+
+def _remove_arrow_sidecars(root_dir: str) -> None:
+    if not os.path.exists(root_dir):
+        return
+    for current_root, _, filenames in os.walk(root_dir):
+        for filename in filenames:
+            if filename.endswith(".arrow"):
+                os.remove(os.path.join(current_root, filename))
 
 
 def process_data(
@@ -700,7 +714,10 @@ def process_data(
         batch_file_name=batch_file_name,
         path=features_file_path,
     )
-    feature_rows = [_normalize_export_row(feature.__dict__) for feature in features]
+    feature_rows = [
+        _normalize_export_row(feature.__dict__) if emit_arrow else feature.__dict__
+        for feature in features
+    ]
     features_gzip_path, features_arrow_path = _write_flat_table_rows(
         feature_rows,
         features_file_path,
@@ -731,7 +748,8 @@ def process_data(
         path=activations_file_path,
     )
     activation_rows = [
-        _normalize_export_row(activation.__dict__) for activation in activations
+        _normalize_export_row(activation.__dict__) if emit_arrow else activation.__dict__
+        for activation in activations
     ]
     activations_gzip_path, activations_arrow_path = _write_flat_table_rows(
         activation_rows,

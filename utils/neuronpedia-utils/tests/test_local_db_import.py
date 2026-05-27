@@ -759,20 +759,25 @@ def test_build_saedashboard_columnar_activation_records_prefers_activation_copy_
 
     records = db_import.build_saedashboard_columnar_activation_records(
         columnar_root,
-        model_id="ignored-model",
-        layer="ignored-layer",
-        creator_id="ignored-creator",
+        model_id="override-model",
+        layer="override-layer",
+        creator_id="override-creator",
         created_at="2026-04-05T06:07:08",
-        activation_id_prefix="ignored-act",
+        activation_id_prefix="override-act",
         decode_token_ids=lambda _token_ids: (_ for _ in ()).throw(
             AssertionError("activation_copy_rows should bypass token decoding")
         ),
     )
 
-    assert [record["id"] for record in records] == ["copy-5-0", "copy-5-1", "copy-6-0"]
-    assert records[0]["modelId"] == "model-a"
-    assert records[0]["layer"] == "9-source-a"
-    assert records[0]["creatorId"] == "creator-a"
+    assert [record["id"] for record in records] == [
+        "override-act-5-0",
+        "override-act-5-1",
+        "override-act-6-0",
+    ]
+    assert records[0]["modelId"] == "override-model"
+    assert records[0]["layer"] == "override-layer"
+    assert records[0]["creatorId"] == "override-creator"
+    assert records[0]["createdAt"] == "2026-04-05T06:07:08"
 
 
 def test_import_saedashboard_columnar_activations_local_db_streams_copy_batches(
@@ -824,9 +829,11 @@ def test_import_saedashboard_columnar_activations_local_db_streams_copy_batches(
         db_import.import_saedashboard_columnar_activations_local_db_with_connection(
             object(),
             columnar_root,
-            model_id="model-a",
-            layer="9-source-a",
-            creator_id="creator-a",
+            model_id="override-model",
+            layer="override-layer",
+            creator_id="override-creator",
+            created_at="2026-04-05T06:07:08",
+            activation_id_prefix="override-act",
             decode_token_ids=lambda _token_ids: (_ for _ in ()).throw(
                 AssertionError("activation_rows should bypass token decoding")
             ),
@@ -838,15 +845,19 @@ def test_import_saedashboard_columnar_activations_local_db_streams_copy_batches(
     copied_rows: list[dict[str, Any]] = []
     for batch in copied_batches:
         copied_rows.extend(batch.to_pylist())
-    assert copied_rows[0]["id"] == "copy-5-0"
+    assert copied_rows[0]["id"] == "override-act-5-0"
     assert copied_rows[0]["tokens"] == ["tok_101", "tok_102"]
     assert copied_rows[0]["values"] == [0.123, 0.555]
-    assert copied_rows[1]["id"] == "copy-5-1"
+    assert copied_rows[0]["modelId"] == "override-model"
+    assert copied_rows[0]["layer"] == "override-layer"
+    assert copied_rows[0]["creatorId"] == "override-creator"
+    assert copied_rows[0]["createdAt"] == "2026-04-05T06:07:08"
+    assert copied_rows[1]["id"] == "override-act-5-1"
     assert copied_rows[1]["tokens"] == ["tok_103"]
     assert [row["id"] for row in copied_rows] == [
-        "copy-5-0",
-        "copy-5-1",
-        "copy-6-0",
+        "override-act-5-0",
+        "override-act-5-1",
+        "override-act-6-0",
     ]
     assert captured_use_stage_table == [True]
     assert summary.bundle_row_counts == {"Activation": 3}

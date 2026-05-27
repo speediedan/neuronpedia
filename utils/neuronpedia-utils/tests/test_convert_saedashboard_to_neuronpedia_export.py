@@ -239,6 +239,26 @@ def test_write_flat_table_rows_arrow_matches_legacy_metadata_row(
     ] == legacy_rows
 
 
+def test_write_flat_table_rows_removes_stale_arrow_when_disabled(tmp_path: Path) -> None:
+    module = _load_converter_module()
+    row = module._normalize_export_row({"id": "gemma-3-1b-it", "layers": 26})
+    jsonl_path = tmp_path / "model.jsonl"
+    stale_batch_arrow = tmp_path / "activations" / "batch-9.arrow"
+    stale_batch_arrow.parent.mkdir()
+    stale_batch_arrow.write_bytes(b"stale")
+
+    _, arrow_path = module._write_flat_table_rows([row], str(jsonl_path), emit_arrow=True)
+    assert arrow_path is not None
+    assert Path(arrow_path).exists()
+
+    module._remove_arrow_sidecars(str(tmp_path))
+    _, disabled_arrow_path = module._write_flat_table_rows([row], str(jsonl_path), emit_arrow=False)
+
+    assert disabled_arrow_path is None
+    assert not Path(arrow_path).exists()
+    assert not stale_batch_arrow.exists()
+
+
 def test_process_data_arrow_jsonl_matches_legacy_rows(tmp_path: Path) -> None:
     module = _load_converter_module()
     module.DEFAULT_CREATOR_ID = "test-creator"

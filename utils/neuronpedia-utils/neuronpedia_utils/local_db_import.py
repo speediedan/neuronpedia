@@ -1255,6 +1255,108 @@ def _append_activation_columns_from_activation_row(
         columns[column_name].append(record[column_name])
 
 
+def _activation_copy_sequence_index(
+    activation_id: str,
+    feature_index: int,
+) -> int:
+    try:
+        _prefix, feature_suffix, sequence_suffix = activation_id.rsplit("-", 2)
+    except ValueError as exc:
+        raise NeuronpediaLocalDBImportError(
+            "Columnar activation_copy_rows ids must end with '-{feature_index}-{sequence_index}'; "
+            f"got {activation_id!r}."
+        ) from exc
+
+    try:
+        feature_from_id = int(feature_suffix)
+        sequence_index = int(sequence_suffix)
+    except ValueError as exc:
+        raise NeuronpediaLocalDBImportError(
+            "Columnar activation_copy_rows ids must end with integer feature and sequence indexes; "
+            f"got {activation_id!r}."
+        ) from exc
+
+    if feature_from_id != feature_index:
+        raise NeuronpediaLocalDBImportError(
+            "Columnar activation_copy_rows id feature index must match the row index column; "
+            f"got id={activation_id!r} index={feature_index}."
+        )
+
+    return sequence_index
+
+
+def _rewrite_activation_copy_row_batch(
+    batch: Any,
+    *,
+    model_id: str,
+    layer: str,
+    creator_id: str,
+    created_at: str,
+    activation_id_prefix: str,
+) -> Any:
+    pyarrow, _, _ = _load_pyarrow_modules()
+
+    id_index = batch.schema.get_field_index("id")
+    feature_index_index = batch.schema.get_field_index("index")
+    layer_index = batch.schema.get_field_index("layer")
+    model_id_index = batch.schema.get_field_index("modelId")
+    creator_id_index = batch.schema.get_field_index("creatorId")
+    created_at_index = batch.schema.get_field_index("createdAt")
+
+    feature_indices = cast(list[int], batch.column(feature_index_index).to_pylist())
+    activation_ids = cast(list[str], batch.column(id_index).to_pylist())
+    row_count = len(feature_indices)
+
+    rewritten_ids = [
+        f"{activation_id_prefix}-{feature_index}-{_activation_copy_sequence_index(activation_id, feature_index)}"
+        for activation_id, feature_index in zip(
+            activation_ids, feature_indices, strict=True
+        )
+    ]
+
+    rewritten_columns = []
+    for column_name in SAEDASHBOARD_COLUMNAR_ACTIVATION_COPY_COLUMNS:
+        column_index = batch.schema.get_field_index(column_name)
+        column = batch.column(column_index)
+        if column_name == "id":
+            rewritten_columns.append(
+                pyarrow.array(rewritten_ids, type=batch.schema.field(id_index).type)
+            )
+        elif column_name == "layer":
+            rewritten_columns.append(
+                pyarrow.array(
+                    [layer] * row_count, type=batch.schema.field(layer_index).type
+                )
+            )
+        elif column_name == "modelId":
+            rewritten_columns.append(
+                pyarrow.array(
+                    [model_id] * row_count, type=batch.schema.field(model_id_index).type
+                )
+            )
+        elif column_name == "creatorId":
+            rewritten_columns.append(
+                pyarrow.array(
+                    [creator_id] * row_count,
+                    type=batch.schema.field(creator_id_index).type,
+                )
+            )
+        elif column_name == "createdAt":
+            rewritten_columns.append(
+                pyarrow.array(
+                    [created_at] * row_count,
+                    type=batch.schema.field(created_at_index).type,
+                )
+            )
+        else:
+            rewritten_columns.append(column)
+
+    return pyarrow.RecordBatch.from_arrays(
+        rewritten_columns,
+        names=SAEDASHBOARD_COLUMNAR_ACTIVATION_COPY_COLUMNS,
+    )
+
+
 def _iter_activation_record_batches_from_sequence_row_batches(
     batches: Iterable[Any],
     *,
@@ -1394,8 +1496,13 @@ def _iter_activation_record_batches_from_activation_row_batches(
 
 def _iter_activation_record_batches_from_activation_copy_row_batches(
     batches: Iterable[Any],
+    *,
+    model_id: str,
+    layer: str,
+    creator_id: str,
+    created_at: str,
+    activation_id_prefix: str,
 ) -> Iterable[Any]:
-    pyarrow, _, _ = _load_pyarrow_modules()
     required_columns = set(SAEDASHBOARD_COLUMNAR_ACTIVATION_COPY_COLUMNS)
     for batch in batches:
         missing_columns = required_columns - set(batch.schema.names)
@@ -1404,12 +1511,13 @@ def _iter_activation_record_batches_from_activation_copy_row_batches(
                 "Columnar activation_copy_rows batch is missing required Activation COPY columns: "
                 f"{sorted(missing_columns)}."
             )
-        yield pyarrow.RecordBatch.from_arrays(
-            [
-                batch.column(batch.schema.get_field_index(column_name))
-                for column_name in SAEDASHBOARD_COLUMNAR_ACTIVATION_COPY_COLUMNS
-            ],
-            names=SAEDASHBOARD_COLUMNAR_ACTIVATION_COPY_COLUMNS,
+        yield _rewrite_activation_copy_row_batch(
+            batch,
+            model_id=model_id,
+            layer=layer,
+            creator_id=creator_id,
+            created_at=created_at,
+            activation_id_prefix=activation_id_prefix,
         )
 
 
@@ -1439,7 +1547,12 @@ def _iter_saedashboard_columnar_activation_record_batches_with_metadata(
                 yield from _iter_activation_record_batches_from_activation_copy_row_batches(
                     _iter_columnar_record_batches(
                         table_path, batch_size=read_batch_size
-                    )
+                    ),
+                    model_id=model_id,
+                    layer=layer,
+                    creator_id=creator_id,
+                    created_at=created_at_record_value,
+                    activation_id_prefix=activation_id_prefix,
                 )
             elif table_name == "activation_rows":
                 yield from _iter_activation_record_batches_from_activation_row_batches(
@@ -1496,7 +1609,12 @@ def _build_saedashboard_columnar_activation_records_with_metadata(
             for (
                 batch
             ) in _iter_activation_record_batches_from_activation_copy_row_batches(
-                _iter_columnar_record_batches(table_path, batch_size=read_batch_size)
+                _iter_columnar_record_batches(table_path, batch_size=read_batch_size),
+                model_id=model_id,
+                layer=layer,
+                creator_id=creator_id,
+                created_at=created_at_record_value,
+                activation_id_prefix=activation_id_prefix,
             ):
                 records.extend(cast(list[dict[str, Any]], batch.to_pylist()))
         elif table_name == "activation_rows":
