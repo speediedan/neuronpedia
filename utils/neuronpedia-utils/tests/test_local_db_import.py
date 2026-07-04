@@ -2041,3 +2041,37 @@ def test_benchmark_neuronpedia_export_bundle_local_db_modes_rejects_multi_mode_n
             local_db_url="postgres://postgres:postgres@127.0.0.1:5433/postgres",
             rollback_each_mode=False,
         )
+
+
+def test_iter_jsonb_record_payloads_splits_oversized_chunks() -> None:
+    records = [{"id": index, "values": "x" * 40} for index in range(8)]
+
+    default_payloads = list(
+        db_import.iter_jsonb_record_payloads(records, chunk_size=4)
+    )
+    assert len(default_payloads) == 2
+    combined = [record for payload in default_payloads for record in json.loads(payload)]
+    assert combined == records
+
+    # Force byte-limit splitting: each 4-record chunk serializes to ~260 bytes.
+    split_payloads = list(
+        db_import.iter_jsonb_record_payloads(
+            records, chunk_size=4, max_payload_bytes=150
+        )
+    )
+    assert len(split_payloads) == 4
+    for payload in split_payloads:
+        assert len(payload) <= 150
+    combined = [record for payload in split_payloads for record in json.loads(payload)]
+    assert combined == records
+
+
+def test_iter_jsonb_record_payloads_raises_for_single_oversized_record() -> None:
+    records = [{"id": 0, "values": "x" * 500}]
+
+    with pytest.raises(db_import.NeuronpediaLocalDBImportError, match="jsonb payload limit"):
+        list(
+            db_import.iter_jsonb_record_payloads(
+                records, chunk_size=10, max_payload_bytes=100
+            )
+        )

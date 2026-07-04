@@ -2686,6 +2686,49 @@ def resolve_table_column_defs(
     return [(row[0], row[1]) for row in cursor.fetchall()]
 
 
+# Postgres caps the total size of jsonb array elements at 268,435,455 bytes; keep the
+# serialized `jsonb_to_recordset` payloads comfortably below that so wide-context
+# activation records (e.g. 2048 features x 319-token prompts) import without tripping
+# `ProgramLimitExceeded`.
+MAX_JSONB_PAYLOAD_BYTES = 192 * 1024 * 1024
+
+
+def iter_jsonb_record_payloads(
+    records: list[dict[str, Any]],
+    *,
+    chunk_size: int,
+    max_payload_bytes: int = MAX_JSONB_PAYLOAD_BYTES,
+) -> Any:
+    """Yield serialized jsonb payload strings for record chunks.
+
+    Chunks first follow the row-count ``chunk_size``; any chunk whose serialized payload
+    exceeds ``max_payload_bytes`` is recursively halved (preserving record order) so each
+    executed statement stays under the Postgres jsonb array size limit. ``json.dumps``
+    escapes non-ASCII by default, so ``len(payload)`` equals the byte length.
+    """
+
+    pending: list[list[dict[str, Any]]] = [
+        records[start_idx : start_idx + chunk_size]
+        for start_idx in range(0, len(records), max(1, chunk_size))
+    ]
+    pending.reverse()
+    while pending:
+        chunk = pending.pop()
+        payload = json.dumps(chunk).replace("\\u0000", " ")
+        if len(payload) > max_payload_bytes and len(chunk) > 1:
+            midpoint = len(chunk) // 2
+            pending.append(chunk[midpoint:])
+            pending.append(chunk[:midpoint])
+            continue
+        if len(payload) > max_payload_bytes:
+            raise NeuronpediaLocalDBImportError(
+                "A single record serializes to "
+                f"{len(payload)} bytes, exceeding the jsonb payload limit of "
+                f"{max_payload_bytes} bytes."
+            )
+        yield payload
+
+
 def import_records_local_db(
     connection: Any,
     table_name: str,
@@ -2730,9 +2773,7 @@ def import_records_local_db(
         )
 
         imported_rows = 0
-        for start_idx in range(0, len(records), chunk_size):
-            chunk = records[start_idx : start_idx + chunk_size]
-            payload = json.dumps(chunk).replace("\\u0000", " ")
+        for payload in iter_jsonb_record_payloads(records, chunk_size=chunk_size):
             cursor.execute(query, (payload,))
             if cursor.rowcount > 0:
                 imported_rows += cursor.rowcount
