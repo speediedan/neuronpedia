@@ -96,6 +96,7 @@ from neuronpedia_inference.shared import (  # noqa: F401
     STR_TO_DTYPE,
     Model,
     replace_tlens_model_id_with_hf_model_id,
+    resolve_model_id_for_load,
 )
 from neuronpedia_inference.utils import checkCudaError
 
@@ -286,10 +287,10 @@ async def initialize(
                     "Use --device cpu, or disable --nnsight."
                 )
 
-            model_to_load = (
-                config.override_model_id
-                if config.override_model_id
-                else config.model_id
+            model_to_load = resolve_model_id_for_load(
+                config.model_id,
+                override_model_id=config.override_model_id,
+                custom_hf_model_id=config.custom_hf_model_id,
             )
             logger.info("Model to load: %s", model_to_load)
             nnsight_kwargs = {}
@@ -320,7 +321,7 @@ async def initialize(
             rename_config = RenameConfig(attn_name=["self_attn", "linear_attn"])
             try:
                 model = StandardizedTransformer(
-                    replace_tlens_model_id_with_hf_model_id(model_to_load),
+                    model_to_load,
                     dtype=STR_TO_DTYPE[config.model_dtype],
                     trust_remote_code=True,
                     rename_config=rename_config,
@@ -343,14 +344,14 @@ async def initialize(
                     "Use a different model loading mode on macOS."
                 )
             logger.info("Loading model with chatspace VLLM...")
-            model_to_load = (
-                config.override_model_id
-                if config.override_model_id
-                else config.model_id
+            model_to_load = resolve_model_id_for_load(
+                config.model_id,
+                override_model_id=config.override_model_id,
+                custom_hf_model_id=config.custom_hf_model_id,
             )
             logger.info("Model to load: %s", model_to_load)
             cfg = VLLMSteeringConfig(
-                model_name=replace_tlens_model_id_with_hf_model_id(model_to_load),
+                model_name=model_to_load,
                 tensor_parallel_size=CHATSPACE_NUM_GPUS,
                 gpu_memory_utilization=CHATSPACE_GPU_MEMORY_UTILIZATION,
                 max_model_len=config.token_limit,
@@ -367,6 +368,12 @@ async def initialize(
         elif USE_TLENS_BRIDGE == False:
             logger.info("Loading model...")
 
+            model_to_load = resolve_model_id_for_load(
+                config.model_id,
+                override_model_id=config.override_model_id,
+                custom_hf_model_id=config.custom_hf_model_id,
+            )
+
             hf_model = None
             hf_tokenizer = None
             if custom_hf_model_id is not None:
@@ -378,11 +385,7 @@ async def initialize(
                 hf_tokenizer = AutoTokenizer.from_pretrained(custom_hf_model_id)
 
             model = HookedTransformer.from_pretrained_no_processing(
-                (
-                    config.override_model_id
-                    if config.override_model_id
-                    else config.model_id
-                ),
+                model_to_load,
                 device=args.device,
                 dtype=STR_TO_DTYPE[config.model_dtype],
                 n_devices=device_count,

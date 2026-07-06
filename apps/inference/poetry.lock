@@ -6799,33 +6799,37 @@ files = [
 
 [[package]]
 name = "sae-lens"
-version = "6.30.0"
+version = "6.45.3"
 description = "Training and Analyzing Sparse Autoencoders (SAEs)"
 optional = false
-python-versions = "<4.0,>=3.10"
+python-versions = "^3.10"
 groups = ["main"]
-files = [
-    {file = "sae_lens-6.30.0-py3-none-any.whl", hash = "sha256:5f578f068714e5ddffded2dd714594317f31c74724ce7ecc367f65d02be15268"},
-    {file = "sae_lens-6.30.0.tar.gz", hash = "sha256:de1e077c505f175c4ebf904a5506a89bbaf5eb905386958543f7b0bf35d00cf6"},
-]
+files = []
+develop = false
 
 [package.dependencies]
-babe = ">=0.0.7,<0.0.8"
+babe = "^0.0.7"
 datasets = ">=3.1.0"
-nltk = ">=3.8.1,<4.0.0"
+nltk = "^3.8.1"
 plotly = ">=5.19.0"
 plotly-express = ">=0.4.1"
 python-dotenv = ">=1.0.1"
-pyyaml = ">=6.0.1,<7.0.0"
+pyyaml = "^6.0.1"
 safetensors = ">=0.4.2,<1.0.0"
-simple-parsing = ">=0.1.6,<0.2.0"
+simple-parsing = "^0.1.8"
 tenacity = ">=9.0.0"
-transformer-lens = ">=2.16.1,<3.0.0"
-transformers = ">=4.38.1,<5.0.0"
-typing-extensions = ">=4.10.0,<5.0.0"
+transformer-lens = ">=2.16.1"
+transformers = ">=4.38.1,<6.0.0"
+typing-extensions = "^4.10.0"
 
 [package.extras]
 mamba = ["mamba-lens (>=0.0.4,<0.0.5)"]
+
+[package.source]
+type = "git"
+url = "https://github.com/speediedan/SAELens.git"
+reference = "streamlined-streamable-dashboard-generation-phase-1"
+resolved_reference = "16cdc72997159a79fec4ba837d517b71a6f4a44b"
 
 [[package]]
 name = "safetensors"
@@ -7368,14 +7372,14 @@ files = [
 
 [[package]]
 name = "simple-parsing"
-version = "0.1.7"
-description = "A small utility for simplifying and cleaning up argument parsing scripts."
+version = "0.1.8"
+description = "A small utility to simplify and clean up argument parsing scripts."
 optional = false
-python-versions = "<4.0,>=3.8"
+python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "simple_parsing-0.1.7-py3-none-any.whl", hash = "sha256:5276e6c90c157362dd0173d1eecebe58361a66b457129cc9bba13b78a4e85092"},
-    {file = "simple_parsing-0.1.7.tar.gz", hash = "sha256:225e6b35252d68f7894716101fe3bd7e6dd3d30ab7b1c3c023f77a42dbe1336f"},
+    {file = "simple_parsing-0.1.8-py3-none-any.whl", hash = "sha256:4d1ef136a28674b3ebb9760cacda4d6f01de32de0b280a869df977d182f12947"},
+    {file = "simple_parsing-0.1.8.tar.gz", hash = "sha256:19c2a9002ebd7ad281fce579f9b2a0aa0c4d67e1688cee0e8cdf6d8e98ec2c18"},
 ]
 
 [package.dependencies]
@@ -7383,8 +7387,8 @@ docstring-parser = ">=0.15,<1.0"
 typing-extensions = ">=4.5.0"
 
 [package.extras]
-toml = ["tomli (>=2.0.1,<3.0.0)", "tomli-w (>=1.0.0,<2.0.0)"]
-yaml = ["pyyaml (>=6.0.1,<7.0.0)"]
+toml = ["tomli (>=2.2.1)", "tomli-w (>=1.0.0)"]
+yaml = ["pyyaml (>=6.0.2)"]
 
 [[package]]
 name = "simple-websocket"
@@ -9254,4 +9258,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<3.14"
-content-hash = "8639c6bb225b5020cf3e2a9758c0c7d97b67f3164be1b756f016a9c571fae1e3"
+content-hash = "2b38790f549a442ab379e758e330322f8b73f7791ddadd364a513dbc5f11634a"
